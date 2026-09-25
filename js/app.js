@@ -7,7 +7,7 @@ import {
   defaultState,
   uid,
   evaluateBadges,
-} from "./storage.js?v=20260926d";
+} from "./storage.js?v=20260926e";
 import {
   cloudReady,
   getSavedRoomCode,
@@ -19,9 +19,9 @@ import {
   unsubscribeRoom,
   isApplyingRemote,
   normalizeCode,
-} from "./cloud.js?v=20260926d";
-import { geocodePlace, placesMissingCoords } from "./geo.js?v=20260926d";
-import { renderMap, invalidateMap } from "./map.js?v=20260926d";
+} from "./cloud.js?v=20260926e";
+import { geocodePlace, placesMissingCoords } from "./geo.js?v=20260926e";
+import { renderMap, invalidateMap } from "./map.js?v=20260926e";
 
 let state = loadState() || defaultState();
 let roomCode = getSavedRoomCode();
@@ -525,18 +525,9 @@ async function onSavePlace(e) {
 
   try {
     const existing = editingId ? state.places.find((p) => p.id === editingId) : null;
-    const needsGeo =
-      !existing ||
-      !(Number.isFinite(existing.lat) && Number.isFinite(existing.lng)) ||
-      (existing.address || "") !== payload.address ||
-      existing.name !== payload.name ||
-      // re-pin if previous result landed outside Taiwan (e.g. Japan)
-      (Number.isFinite(existing.lat) &&
-        Number.isFinite(existing.lng) &&
-        (existing.lat < 21.8 ||
-          existing.lat > 25.4 ||
-          existing.lng < 119.2 ||
-          existing.lng > 122.2));
+    // Force re-geocode when user saves from editor (even if text unchanged),
+    // so previously wrong / failed pins can be fixed after geocoder improvements.
+    const needsGeo = !payload.wishlist;
 
     if (!payload.wishlist && needsGeo) {
       try {
