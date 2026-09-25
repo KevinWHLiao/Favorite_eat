@@ -1,11 +1,8 @@
 /**
- * 把下面兩行換成你的 Supabase 專案設定：
- * Project Settings → API → Project URL / anon public key
- *
- * 免費申請：https://supabase.com
+ * Supabase 專案設定（anon / publishable 可公開於前端）
  */
-export const SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
-export const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+export const SUPABASE_URL = "https://cterospduxvldhgdcnyr.supabase.co";
+export const SUPABASE_ANON_KEY = "sb_publishable_7C9mcP4APxJnkhJ6Nfpz8Q_MeuhKlSN";
 
 export function isCloudConfigured() {
   return (
