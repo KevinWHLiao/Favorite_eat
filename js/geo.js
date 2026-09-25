@@ -84,6 +84,9 @@ export function taiwanAddressVariants(raw) {
       .replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0))
       .replace(/號$/, "");
     const numFull = `${num}號`;
+    // Photon matches best with spaces: "松山路 445 信義 台北"
+    push([road, num, dist?.replace(/區$/, ""), city?.replace(/市$/, "")].filter(Boolean).join(" "));
+    push([road, num, dist, city].filter(Boolean).join(" "));
     push([`${road}${numFull}`, dist, city].filter(Boolean).join(" "));
     push([road, numFull, dist, city].filter(Boolean).join(" "));
     push([`${road}${num}`, dist, city].filter(Boolean).join(" "));
@@ -107,6 +110,33 @@ function isInTaiwan(lat, lng) {
   );
 }
 
+function scorePhotonHit(q, props) {
+  const query = String(q || "");
+  const street = String(props.street || "");
+  const house = String(props.housenumber || "").replace(/號$/, "");
+  let score = 1;
+
+  if (street && query.includes(street.replace(/\s/g, ""))) score += 5;
+  if (street && query.includes(street)) score += 3;
+
+  if (house) {
+    if (query.includes(house)) score += 6;
+    // strongly prefer housenumber match when query has a number
+    if (/\d/.test(query) && !query.includes(house)) score -= 4;
+  }
+
+  const dist = String(props.district || "");
+  if (dist && query.includes(dist.replace(/區$/, ""))) score += 2;
+
+  const city = String(props.city || "");
+  if (city && (query.includes("台北") || query.includes(city))) score += 1;
+
+  // amenity/restaurant slightly preferred when searching a shop area
+  if (props.osm_key === "amenity") score += 1;
+
+  return score;
+}
+
 async function geocodePhoton(q) {
   try {
     // Do NOT pass lang=zh — Photon rejects it with 400
@@ -118,6 +148,7 @@ async function geocodePhoton(q) {
     if (!res.ok) return null;
     const data = await res.json();
     const features = data?.features || [];
+    const candidates = [];
 
     for (const feature of features) {
       const coords = feature?.geometry?.coordinates;
@@ -129,23 +160,30 @@ async function geocodePhoton(q) {
       const cc = String(props.countrycode || "").toUpperCase();
       if (cc && cc !== "TW") continue;
 
-      const label = [
-        props.name,
-        props.housenumber ? `${props.street || ""}${props.housenumber}` : props.street,
-        props.district || props.locality,
-        props.city,
-        props.country,
-      ]
-        .filter(Boolean)
-        .join(" · ");
-
-      return {
-        lat: Number(lat),
-        lng: Number(lng),
-        label: label || q,
-      };
+      const score = scorePhotonHit(q, props);
+      candidates.push({ lat: Number(lat), lng: Number(lng), props, score });
     }
-    return null;
+
+    candidates.sort((a, b) => b.score - a.score);
+    const best = candidates[0];
+    if (!best || best.score < 0) return null;
+
+    const props = best.props;
+    const label = [
+      props.name,
+      props.housenumber ? `${props.street || ""}${props.housenumber}` : props.street,
+      props.district || props.locality,
+      props.city,
+      props.country,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    return {
+      lat: best.lat,
+      lng: best.lng,
+      label: label || q,
+    };
   } catch {
     return null;
   }
