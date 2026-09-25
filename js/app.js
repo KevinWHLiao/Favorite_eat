@@ -7,7 +7,7 @@ import {
   defaultState,
   uid,
   evaluateBadges,
-} from "./storage.js?v=20260926c";
+} from "./storage.js?v=20260926d";
 import {
   cloudReady,
   getSavedRoomCode,
@@ -19,9 +19,9 @@ import {
   unsubscribeRoom,
   isApplyingRemote,
   normalizeCode,
-} from "./cloud.js?v=20260926c";
-import { geocodePlace, placesMissingCoords } from "./geo.js?v=20260926c";
-import { renderMap, invalidateMap } from "./map.js?v=20260926c";
+} from "./cloud.js?v=20260926d";
+import { geocodePlace, placesMissingCoords } from "./geo.js?v=20260926d";
+import { renderMap, invalidateMap } from "./map.js?v=20260926d";
 
 let state = loadState() || defaultState();
 let roomCode = getSavedRoomCode();
@@ -529,7 +529,14 @@ async function onSavePlace(e) {
       !existing ||
       !(Number.isFinite(existing.lat) && Number.isFinite(existing.lng)) ||
       (existing.address || "") !== payload.address ||
-      existing.name !== payload.name;
+      existing.name !== payload.name ||
+      // re-pin if previous result landed outside Taiwan (e.g. Japan)
+      (Number.isFinite(existing.lat) &&
+        Number.isFinite(existing.lng) &&
+        (existing.lat < 21.8 ||
+          existing.lat > 25.4 ||
+          existing.lng < 119.2 ||
+          existing.lng > 122.2));
 
     if (!payload.wishlist && needsGeo) {
       try {
