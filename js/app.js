@@ -7,7 +7,7 @@ import {
   defaultState,
   uid,
   evaluateBadges,
-} from "./storage.js?v=20260926b";
+} from "./storage.js?v=20260926c";
 import {
   cloudReady,
   getSavedRoomCode,
@@ -19,9 +19,9 @@ import {
   unsubscribeRoom,
   isApplyingRemote,
   normalizeCode,
-} from "./cloud.js?v=20260926b";
-import { geocodeAddress } from "./geo.js?v=20260926b";
-import { renderMap, invalidateMap } from "./map.js?v=20260926b";
+} from "./cloud.js?v=20260926c";
+import { geocodePlace, placesMissingCoords } from "./geo.js?v=20260926c";
+import { renderMap, invalidateMap } from "./map.js?v=20260926c";
 
 let state = loadState() || defaultState();
 let roomCode = getSavedRoomCode();
@@ -223,6 +223,7 @@ function bindEvents() {
   $("#btn-copy-room").addEventListener("click", copyRoomCode);
   $("#room-pill").addEventListener("click", copyRoomCode);
   $("#btn-leave-room").addEventListener("click", leaveRoom);
+  $("#btn-autofix-geo")?.addEventListener("click", autofixMissingGeo);
 }
 
 async function onOnboardSubmit(e) {
@@ -294,6 +295,7 @@ function switchView(name) {
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
   if (name === "map") {
     renderMap(state.places, { onOpen: openDetail });
+    renderMissingPlaces();
     invalidateMap();
   }
 }
@@ -332,7 +334,32 @@ function renderAll() {
   renderBadges();
   if ($("#view-map")?.classList.contains("active")) {
     renderMap(state.places, { onOpen: openDetail });
+    renderMissingPlaces();
   }
+}
+
+function renderMissingPlaces() {
+  const box = $("#map-missing");
+  if (!box) return;
+  const missing = placesMissingCoords(state.places);
+  if (!missing.length) {
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML =
+    `<p class="sub" style="margin:0 0 0.25rem">這些店還沒上地圖（點「補地址／定位」）：</p>` +
+    missing
+      .map(
+        (p) => `
+      <div class="map-missing-item">
+        <p><strong>${escapeHtml(p.name)}</strong> · ${escapeHtml(p.cuisine || "")}</p>
+        <button type="button" class="btn ghost" data-fix-geo="${p.id}">補地址／定位</button>
+      </div>`
+      )
+      .join("");
+  $$("[data-fix-geo]", box).forEach((btn) => {
+    btn.addEventListener("click", () => openEditor(btn.dataset.fixGeo));
+  });
 }
 
 function renderHome() {
@@ -459,7 +486,7 @@ function openEditor(id = null) {
     pendingMoods = [...(place.moods || [])];
     $("#geo-hint").textContent = place.lat
       ? `已標記在地圖上 · ${place.geoLabel || place.address || ""}`
-      : "填地址後會自動標到地圖上";
+      : "沒填地址也沒關係，會先用店名自動找位置";
   } else {
     title.textContent = "新增回憶";
     del.classList.add("hidden");
@@ -469,7 +496,7 @@ function openEditor(id = null) {
     $("#f-address").value = "";
     pendingRating = 5;
     pendingMoods = [];
-    $("#geo-hint").textContent = "填地址後會自動標到地圖上";
+    $("#geo-hint").textContent = "沒填地址也沒關係，會先用店名自動找位置";
   }
   $("#f-rating").value = String(pendingRating);
   syncStars();
@@ -498,11 +525,15 @@ async function onSavePlace(e) {
 
   try {
     const existing = editingId ? state.places.find((p) => p.id === editingId) : null;
-    const addressChanged = !existing || (existing.address || "") !== payload.address;
+    const needsGeo =
+      !existing ||
+      !(Number.isFinite(existing.lat) && Number.isFinite(existing.lng)) ||
+      (existing.address || "") !== payload.address ||
+      existing.name !== payload.name;
 
-    if (payload.address && addressChanged) {
+    if (!payload.wishlist && needsGeo) {
       try {
-        const geo = await geocodeAddress(payload.address);
+        const geo = await geocodePlace({ name: payload.name, address: payload.address });
         if (geo) {
           payload.lat = geo.lat;
           payload.lng = geo.lng;
@@ -512,16 +543,16 @@ async function onSavePlace(e) {
           payload.lat = null;
           payload.lng = null;
           payload.geoLabel = "";
-          toast("找不到這個地址，回憶仍會保存（地圖暫不顯示）");
+          toast("找不到位置，回憶仍會保存。可再補更完整的地址");
         }
       } catch (err) {
         console.warn(err);
         toast("地址查詢失敗，回憶仍會保存");
       }
-    } else if (!payload.address) {
-      payload.lat = null;
-      payload.lng = null;
-      payload.geoLabel = "";
+    } else if (payload.wishlist) {
+      payload.lat = existing?.lat ?? null;
+      payload.lng = existing?.lng ?? null;
+      payload.geoLabel = existing?.geoLabel || "";
     } else if (existing) {
       payload.lat = existing.lat;
       payload.lng = existing.lng;
@@ -548,11 +579,54 @@ async function onSavePlace(e) {
           : `「${payload.name}」已蓋章！`
       );
     } else {
-      toast("已保存並同步");
+      toast(payload.lat ? "已保存並標上地圖" : "已保存並同步");
     }
   } finally {
     saveBtn.disabled = false;
     saveBtn.textContent = prevText;
+  }
+}
+
+async function autofixMissingGeo() {
+  const missing = placesMissingCoords(state.places);
+  if (!missing.length) {
+    toast("所有吃過的店都已定位囉");
+    return;
+  }
+
+  const btn = $("#btn-autofix-geo");
+  btn.disabled = true;
+  const old = btn.textContent;
+  let ok = 0;
+
+  try {
+    for (let i = 0; i < missing.length; i++) {
+      btn.textContent = `定位中 ${i + 1}/${missing.length}…`;
+      const place = missing[i];
+      const geo = await geocodePlace({ name: place.name, address: place.address });
+      if (!geo) continue;
+      const idx = state.places.findIndex((p) => p.id === place.id);
+      if (idx < 0) continue;
+      state.places[idx] = {
+        ...state.places[idx],
+        lat: geo.lat,
+        lng: geo.lng,
+        geoLabel: geo.label,
+      };
+      ok += 1;
+      // be kind to free geocoders
+      await new Promise((r) => setTimeout(r, 700));
+    }
+    if (ok > 0) {
+      persist();
+      renderAll();
+      toast(`已為 ${ok} 間店標上地圖`);
+    } else {
+      toast("自動定位失敗，請編輯店家補上更完整地址");
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
   }
 }
 

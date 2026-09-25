@@ -1,4 +1,4 @@
-import { placesWithCoords } from "./geo.js?v=20260926b";
+import { placesWithCoords, placesMissingCoords } from "./geo.js?v=20260926c";
 
 let map = null;
 let layer = null;
@@ -50,9 +50,18 @@ export async function renderMap(places, { onOpen } = {}) {
   const pinned = placesWithCoords(places);
 
   if (countEl) {
-    countEl.textContent = pinned.length
-      ? `地圖上有 ${pinned.length} 間已標記的店`
-      : "還沒有可顯示的店，新增回憶時填地址就能出現在地圖上";
+    const missing = placesMissingCoords(places).length;
+    if (pinned.length) {
+      countEl.textContent =
+        missing > 0
+          ? `地圖上有 ${pinned.length} 間 · 還有 ${missing} 間尚未定位`
+          : `地圖上有 ${pinned.length} 間已標記的店`;
+    } else {
+      countEl.textContent =
+        missing > 0
+          ? `有 ${missing} 間店還沒定位，可按上方按鈕自動找位置`
+          : "還沒有可顯示的店，新增回憶時會自動用店名定位";
+    }
   }
 
   if (!pinned.length) {

@@ -1,5 +1,5 @@
 /**
- * Geocode address. Tries Photon first, then Nominatim.
+ * Geocode address / place name. Tries Photon first, then Nominatim.
  * No API key required.
  */
 export async function geocodeAddress(query) {
@@ -10,6 +10,26 @@ export async function geocodeAddress(query) {
   if (photon) return photon;
 
   return geocodeNominatim(q);
+}
+
+/** Prefer address; fall back to restaurant name (+ Taiwan bias). */
+export async function geocodePlace({ name, address } = {}) {
+  const queries = [];
+  if (address?.trim()) queries.push(address.trim());
+  if (name?.trim()) {
+    queries.push(name.trim());
+    queries.push(`${name.trim()} 台灣`);
+    queries.push(`${name.trim()} Taiwan`);
+  }
+
+  const seen = new Set();
+  for (const q of queries) {
+    if (!q || seen.has(q)) continue;
+    seen.add(q);
+    const hit = await geocodeAddress(q);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 async function geocodePhoton(q) {
@@ -64,5 +84,11 @@ async function geocodeNominatim(q) {
 export function placesWithCoords(places) {
   return (places || []).filter(
     (p) => !p.wishlist && Number.isFinite(p.lat) && Number.isFinite(p.lng)
+  );
+}
+
+export function placesMissingCoords(places) {
+  return (places || []).filter(
+    (p) => !p.wishlist && !(Number.isFinite(p.lat) && Number.isFinite(p.lng))
   );
 }

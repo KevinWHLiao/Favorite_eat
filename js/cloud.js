@@ -1,6 +1,6 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isCloudConfigured } from "./config.js?v=20260926b";
-import { defaultState } from "./storage.js?v=20260926b";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, isCloudConfigured } from "./config.js?v=20260926c";
+import { defaultState } from "./storage.js?v=20260926c";
 
 const ROOM_KEY = "favorite_eat_room";
 
