@@ -8,8 +8,22 @@ import {
   uid,
   evaluateBadges,
 } from "./storage.js";
+import {
+  cloudReady,
+  getSavedRoomCode,
+  rememberRoomCode,
+  createRoom,
+  joinRoom,
+  schedulePush,
+  subscribeRoom,
+  unsubscribeRoom,
+  isApplyingRemote,
+  normalizeCode,
+} from "./cloud.js";
 
 let state = loadState() || defaultState();
+let roomCode = getSavedRoomCode();
+let onboardMode = "create";
 let editingId = null;
 let detailId = null;
 let pendingRating = 5;
@@ -24,18 +38,45 @@ function todayLocal() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function init() {
+async function init() {
   fillCuisineSelects();
   buildStarPicker();
   buildMoodPicker();
   bindEvents();
+  setOnboardMode("create");
+  updateCloudHint();
 
-  if (!state.couple.a || !state.couple.b) {
-    showOnboarding(true);
-  } else {
-    showOnboarding(false);
-    renderAll();
+  if (cloudReady() && roomCode) {
+    setSyncStatus("同步中…");
+    try {
+      const room = await joinRoom(roomCode);
+      roomCode = room.code;
+      state = room.payload;
+      saveState(state);
+      enterApp(`已回到房間 ${roomCode}`);
+      return;
+    } catch (err) {
+      console.warn(err);
+      rememberRoomCode("");
+      roomCode = "";
+      toast("先前房間失效，請重新建立或加入");
+    }
   }
+
+  if (state.couple.a && state.couple.b && roomCode) {
+    enterApp();
+  } else {
+    showOnboarding(true);
+    setSyncStatus(cloudReady() ? "尚未進入房間" : "尚未設定雲端");
+  }
+}
+
+function enterApp(msg) {
+  showOnboarding(false);
+  renderAll();
+  startRealtime();
+  setSyncStatus(cloudReady() && roomCode ? `雲端同步 · ${roomCode}` : "本機模式");
+  if (msg) toast(msg);
 }
 
 function showOnboarding(show) {
@@ -43,11 +84,49 @@ function showOnboarding(show) {
   $("#app").classList.toggle("hidden", show);
 }
 
+function updateCloudHint() {
+  const hint = $("#cloud-hint");
+  if (!cloudReady()) {
+    hint.className = "hint warn";
+    hint.textContent = "雲端尚未設定：請在 js/config.js 填入 Supabase 網址與金鑰。";
+    $("#onboard-submit").disabled = true;
+  } else {
+    hint.className = "hint ok";
+    hint.textContent =
+      onboardMode === "create"
+        ? "建立後會產生房間碼，把碼傳給對方就能一起寫。"
+        : "輸入對方分享的房間碼，進入同一本手帳。";
+    $("#onboard-submit").disabled = false;
+  }
+}
+
+function setOnboardMode(mode) {
+  onboardMode = mode;
+  $$(".mode-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.mode === mode);
+  });
+  const roomField = $("#room-code-field");
+  const roomInput = $("#room-code-input");
+  if (mode === "join") {
+    roomField.classList.remove("hidden");
+    roomInput.required = true;
+    $("#onboard-submit").textContent = "加入雲端房間";
+  } else {
+    roomField.classList.add("hidden");
+    roomInput.required = false;
+    $("#onboard-submit").textContent = "建立雲端房間";
+  }
+  updateCloudHint();
+}
+
+function setSyncStatus(text) {
+  $("#sync-status").textContent = text;
+}
+
 function fillCuisineSelects() {
   const opts = CUISINES.map((c) => `<option value="${c}">${c}</option>`).join("");
   $("#f-cuisine").innerHTML = opts;
-  const filter = $("#filter-cuisine");
-  filter.innerHTML =
+  $("#filter-cuisine").innerHTML =
     `<option value="all">全部料理</option>` +
     CUISINES.map((c) => `<option value="${c}">${c}</option>`).join("");
 }
@@ -106,15 +185,11 @@ function syncMoods() {
 }
 
 function bindEvents() {
-  $("#onboard-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    state.couple.a = $("#name-a").value.trim();
-    state.couple.b = $("#name-b").value.trim();
-    persist();
-    showOnboarding(false);
-    renderAll();
-    toast(`${state.couple.a} & ${state.couple.b}，歡迎來到雙人餐桌`);
+  $$(".mode-btn").forEach((btn) => {
+    btn.addEventListener("click", () => setOnboardMode(btn.dataset.mode));
   });
+
+  $("#onboard-form").addEventListener("submit", onOnboardSubmit);
 
   $$(".tab").forEach((tab) => {
     tab.addEventListener("click", () => switchView(tab.dataset.view));
@@ -143,10 +218,72 @@ function bindEvents() {
 
   $("#btn-export").addEventListener("click", exportData);
   $("#btn-import").addEventListener("change", importData);
-  $("#btn-reset-names").addEventListener("click", () => {
-    $("#name-a").value = state.couple.a;
-    $("#name-b").value = state.couple.b;
-    showOnboarding(true);
+  $("#btn-copy-room").addEventListener("click", copyRoomCode);
+  $("#room-pill").addEventListener("click", copyRoomCode);
+  $("#btn-leave-room").addEventListener("click", leaveRoom);
+}
+
+async function onOnboardSubmit(e) {
+  e.preventDefault();
+  if (!cloudReady()) {
+    toast("請先設定雲端（js/config.js）");
+    return;
+  }
+
+  const a = $("#name-a").value.trim();
+  const b = $("#name-b").value.trim();
+  if (!a || !b) return;
+
+  const submit = $("#onboard-submit");
+  submit.disabled = true;
+  const oldText = submit.textContent;
+  submit.textContent = "連線中…";
+
+  try {
+    if (onboardMode === "create") {
+      state = defaultState();
+      state.couple = { a, b };
+      const room = await createRoom(state);
+      roomCode = room.code;
+      saveState(state);
+      enterApp(`房間已建立！把房間碼 ${roomCode} 傳給對方`);
+    } else {
+      const code = normalizeCode($("#room-code-input").value);
+      const room = await joinRoom(code);
+      roomCode = room.code;
+      state = room.payload;
+      // keep existing couple names on room, but allow joiner to set display if empty
+      if (!state.couple.a || !state.couple.b) {
+        state.couple = { a, b };
+        await persistAsync();
+      } else {
+        // optional: update if they typed names - keep room's names as source of truth
+        saveState(state);
+      }
+      enterApp(`已加入 ${state.couple.a} & ${state.couple.b} 的房間`);
+    }
+  } catch (err) {
+    console.error(err);
+    toast(err.message || "連線失敗，請稍後再試");
+    setSyncStatus("連線失敗");
+  } finally {
+    submit.disabled = false;
+    submit.textContent = oldText;
+  }
+}
+
+function startRealtime() {
+  unsubscribeRoom();
+  if (!cloudReady() || !roomCode) return;
+  subscribeRoom(roomCode, (payload) => {
+    const prev = JSON.stringify(state);
+    const next = JSON.stringify(payload);
+    if (prev === next) return;
+    state = payload;
+    saveState(state);
+    renderAll();
+    setSyncStatus(`已同步對方更新 · ${roomCode}`);
+    toast("另一半更新了手帳");
   });
 }
 
@@ -158,6 +295,17 @@ function switchView(name) {
 function persist() {
   const newly = evaluateBadges(state);
   saveState(state);
+  if (cloudReady() && roomCode && !isApplyingRemote()) {
+    setSyncStatus(`同步中… · ${roomCode}`);
+    schedulePush(roomCode, state, () => {
+      setSyncStatus(`同步失敗 · ${roomCode}`);
+      toast("雲端同步失敗，資料仍保存在本機");
+    });
+    // optimistic synced label
+    setTimeout(() => {
+      if (!isApplyingRemote()) setSyncStatus(`雲端同步 · ${roomCode}`);
+    }, 500);
+  }
   if (newly.length) {
     setTimeout(() => {
       toast(`解鎖成就：${newly.map((b) => b.name).join("、")}`);
@@ -166,8 +314,13 @@ function persist() {
   }
 }
 
+async function persistAsync() {
+  persist();
+}
+
 function renderAll() {
   $("#couple-names").textContent = `${state.couple.a} & ${state.couple.b}`;
+  $("#room-pill").textContent = roomCode ? `房間 · ${roomCode}` : "房間 · —";
   renderHome();
   renderAlbum();
   renderBadges();
@@ -337,7 +490,7 @@ function onSavePlace(e) {
     playStampFx();
     toast(`「${payload.name}」已蓋章！`);
   } else {
-    toast("已保存");
+    toast("已保存並同步");
   }
 }
 
@@ -405,10 +558,12 @@ function spinRoulette() {
 }
 
 function exportData() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ ...state, roomCode }, null, 2)], {
+    type: "application/json",
+  });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `favorite-eat-${state.couple.a}-${state.couple.b}.json`;
+  a.download = `favorite-eat-${roomCode || "local"}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
   toast("已匯出 JSON");
@@ -424,15 +579,39 @@ function importData(e) {
       if (!data.couple || !Array.isArray(data.places)) throw new Error("格式不對");
       state = { ...defaultState(), ...data, stats: { ...defaultState().stats, ...(data.stats || {}) } };
       persist();
-      showOnboarding(false);
       renderAll();
-      toast("匯入成功");
+      toast("匯入成功（已同步到雲端房間）");
     } catch {
       toast("匯入失敗，請確認檔案格式");
     }
     e.target.value = "";
   };
   reader.readAsText(file);
+}
+
+async function copyRoomCode() {
+  if (!roomCode) {
+    toast("目前沒有房間碼");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(roomCode);
+    toast(`房間碼 ${roomCode} 已複製`);
+  } catch {
+    toast(`房間碼：${roomCode}`);
+  }
+}
+
+function leaveRoom() {
+  if (!confirm("離開房間後，此裝置會回到開始畫面。雲端資料仍會保留。")) return;
+  unsubscribeRoom();
+  rememberRoomCode("");
+  roomCode = "";
+  state = defaultState();
+  saveState(state);
+  showOnboarding(true);
+  setSyncStatus(cloudReady() ? "尚未進入房間" : "尚未設定雲端");
+  toast("已離開房間");
 }
 
 function playStampFx() {
@@ -447,7 +626,7 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add("show");
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove("show"), 2600);
+  toast._t = setTimeout(() => el.classList.remove("show"), 2800);
 }
 
 function escapeHtml(str) {

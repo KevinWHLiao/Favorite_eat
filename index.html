@@ -18,8 +18,18 @@
     <div class="onboard-card">
       <p class="brand-mark">Favorite Eat</p>
       <h1>雙人餐桌</h1>
-      <p class="lead">把每一次一起吃飯，蓋成一本屬於你們的美食印章手帳。</p>
+      <p class="lead">輸入同一個房間碼，兩人就能共用一本雲端美食印章手帳。</p>
+
+      <div class="mode-switch" role="tablist" aria-label="進入方式">
+        <button type="button" class="mode-btn active" data-mode="create">建立房間</button>
+        <button type="button" class="mode-btn" data-mode="join">加入房間</button>
+      </div>
+
       <form id="onboard-form" class="stack">
+        <label id="room-code-field" class="hidden">
+          房間碼
+          <input type="text" id="room-code-input" placeholder="例如 A3K9MP" maxlength="12" autocomplete="off" />
+        </label>
         <label>
           你們怎麼叫對方？
           <div class="name-row">
@@ -28,7 +38,8 @@
             <input type="text" id="name-b" placeholder="小B" maxlength="12" required />
           </div>
         </label>
-        <button type="submit" class="btn primary">開始我們的餐桌</button>
+        <p id="cloud-hint" class="hint"></p>
+        <button type="submit" class="btn primary" id="onboard-submit">建立雲端房間</button>
       </form>
     </div>
   </section>
@@ -39,6 +50,7 @@
       <div class="brand">
         <span class="brand-name">Favorite Eat</span>
         <span class="couple-names" id="couple-names"></span>
+        <button type="button" class="room-pill" id="room-pill" title="複製房間碼">房間 · —</button>
       </div>
       <nav class="tabs" role="tablist">
         <button class="tab active" data-view="home" type="button">手帳</button>
@@ -120,12 +132,14 @@
     </main>
 
     <footer class="foot">
+      <span class="sync-status" id="sync-status">本機模式</span>
+      <button class="ghost" id="btn-copy-room" type="button">複製房間碼</button>
       <button class="ghost" id="btn-export" type="button">匯出資料</button>
       <label class="ghost as-btn">
         匯入資料
         <input type="file" id="btn-import" accept="application/json" hidden />
       </label>
-      <button class="ghost" id="btn-reset-names" type="button">改暱稱</button>
+      <button class="ghost" id="btn-leave-room" type="button">離開房間</button>
     </footer>
   </div>
 
