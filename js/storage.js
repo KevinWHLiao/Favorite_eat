@@ -16,6 +16,14 @@ const BADGES = [
   { id: "wishlist", name: "想去清單啟動", desc: "加入至少 1 間想去的店", icon: "◇", test: (s) => s.places.some((p) => p.wishlist) },
   { id: "story", name: "餐桌作家", desc: "寫下 3 則用餐小故事", icon: "✎", test: (s) => s.places.filter((p) => (p.note || "").trim().length > 0).length >= 3 },
   { id: "spin", name: "轉盤命運", desc: "使用過一次今天吃哪", icon: "⟳", test: (s) => s.stats.spins >= 1 },
+  {
+    id: "mapper",
+    name: "美食探險家",
+    desc: "在地圖上標記 3 間吃過的店",
+    icon: "⌖",
+    test: (s) =>
+      s.places.filter((p) => !p.wishlist && Number.isFinite(p.lat) && Number.isFinite(p.lng)).length >= 3,
+  },
 ];
 
 function visitedCount(state) {

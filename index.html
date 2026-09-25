@@ -6,19 +6,30 @@
   <title>Favorite Eat · 雙人餐桌</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css?v=20260926b" />
 </head>
 <body>
   <div class="bg-glow" aria-hidden="true"></div>
-  <div class="bg-noise" aria-hidden="true"></div>
+  <div class="bg-blobs" aria-hidden="true">
+    <span class="blob b1"></span>
+    <span class="blob b2"></span>
+    <span class="blob b3"></span>
+  </div>
+  <div class="bg-doodles" aria-hidden="true">
+    <span class="doodle d1">🍙</span>
+    <span class="doodle d2">🍓</span>
+    <span class="doodle d3">🥟</span>
+    <span class="doodle d4">🧋</span>
+  </div>
 
   <!-- Onboarding -->
   <section id="onboarding" class="screen hidden">
     <div class="onboard-card">
+      <div class="mascot" aria-hidden="true">🍥</div>
       <p class="brand-mark">Favorite Eat</p>
       <h1>雙人餐桌</h1>
-      <p class="lead">輸入同一個房間碼，兩人就能共用一本雲端美食印章手帳。</p>
+      <p class="lead">輸入同一個房間碼，兩人就能共用一本軟綿綿的美食印章手帳。</p>
 
       <div class="mode-switch" role="tablist" aria-label="進入方式">
         <button type="button" class="mode-btn active" data-mode="create">建立房間</button>
@@ -34,7 +45,7 @@
           你們怎麼叫對方？
           <div class="name-row">
             <input type="text" id="name-a" placeholder="小A" maxlength="12" required />
-            <span class="amp">&</span>
+            <span class="amp">♡</span>
             <input type="text" id="name-b" placeholder="小B" maxlength="12" required />
           </div>
         </label>
@@ -55,6 +66,7 @@
       <nav class="tabs" role="tablist">
         <button class="tab active" data-view="home" type="button">手帳</button>
         <button class="tab" data-view="album" type="button">印章</button>
+        <button class="tab" data-view="map" type="button">地圖</button>
         <button class="tab" data-view="roulette" type="button">轉盤</button>
         <button class="tab" data-view="badges" type="button">成就</button>
       </nav>
@@ -98,6 +110,18 @@
         </div>
         <div class="album-grid" id="album-grid"></div>
         <p class="empty hidden" id="album-empty">還沒有印章。去吃一頓，再回來蓋章吧。</p>
+      </section>
+
+      <!-- MAP -->
+      <section id="view-map" class="view">
+        <div class="section-head">
+          <h3>我們的美食地圖</h3>
+        </div>
+        <p class="sub map-lead" id="map-count">吃過的店會出現在這裡</p>
+        <div class="map-shell">
+          <div id="food-map" class="food-map" role="application" aria-label="美食地圖"></div>
+          <p class="map-empty hidden" id="map-empty">還沒有可顯示的店。<br />新增回憶時填上地址，就會自動出現在地圖上 ♡</p>
+        </div>
       </section>
 
       <!-- ROULETTE -->
@@ -155,6 +179,11 @@
           餐廳名稱
           <input type="text" id="f-name" required maxlength="40" placeholder="例如：巷口那家拉麵" />
         </label>
+        <label>
+          地址／附近地標（地圖用）
+          <input type="text" id="f-address" maxlength="120" placeholder="例如：台北市大安區忠孝東路四段…" />
+        </label>
+        <p class="hint" id="geo-hint">填地址後會自動標到地圖上</p>
         <div class="two-col">
           <label>
             料理類型
@@ -187,7 +216,7 @@
         <button type="button" class="btn danger ghost hidden" id="btn-delete">刪除</button>
         <div class="spacer"></div>
         <button type="button" class="btn ghost" id="btn-cancel-edit">取消</button>
-        <button type="submit" class="btn primary">蓋章保存</button>
+        <button type="submit" class="btn primary" id="btn-save-place">蓋章保存</button>
       </footer>
     </form>
   </dialog>
@@ -213,6 +242,6 @@
     <div class="stamp-seal">蓋章！</div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260926a"></script>
+  <script type="module" src="js/app.js?v=20260926b"></script>
 </body>
 </html>

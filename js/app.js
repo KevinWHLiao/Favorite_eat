@@ -7,7 +7,7 @@ import {
   defaultState,
   uid,
   evaluateBadges,
-} from "./storage.js?v=20260926a";
+} from "./storage.js?v=20260926b";
 import {
   cloudReady,
   getSavedRoomCode,
@@ -19,7 +19,9 @@ import {
   unsubscribeRoom,
   isApplyingRemote,
   normalizeCode,
-} from "./cloud.js?v=20260926a";
+} from "./cloud.js?v=20260926b";
+import { geocodeAddress } from "./geo.js?v=20260926b";
+import { renderMap, invalidateMap } from "./map.js?v=20260926b";
 
 let state = loadState() || defaultState();
 let roomCode = getSavedRoomCode();
@@ -290,6 +292,10 @@ function startRealtime() {
 function switchView(name) {
   $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === name));
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
+  if (name === "map") {
+    renderMap(state.places, { onOpen: openDetail });
+    invalidateMap();
+  }
 }
 
 function persist() {
@@ -324,6 +330,9 @@ function renderAll() {
   renderHome();
   renderAlbum();
   renderBadges();
+  if ($("#view-map")?.classList.contains("active")) {
+    renderMap(state.places, { onOpen: openDetail });
+  }
 }
 
 function renderHome() {
@@ -373,10 +382,11 @@ function starsText(n) {
 }
 
 function cardHtml(place) {
+  const pin = Number.isFinite(place.lat) && Number.isFinite(place.lng) ? " · 📍" : "";
   return `
     <article class="stamp-card album-card ${place.wishlist ? "wishlist" : ""}" data-id="${place.id}">
       <div class="stamp-seal-mark">${place.wishlist ? "想去" : "已吃"}</div>
-      <p class="card-cuisine">${place.cuisine}</p>
+      <p class="card-cuisine">${place.cuisine}${pin}</p>
       <h4 class="card-name">${escapeHtml(place.name)}</h4>
       <p class="card-meta">
         ${place.wishlist ? "願望清單" : `<span class="stars-inline">${starsText(place.rating)}</span>`}
@@ -440,20 +450,26 @@ function openEditor(id = null) {
     title.textContent = "編輯回憶";
     del.classList.remove("hidden");
     $("#f-name").value = place.name;
+    $("#f-address").value = place.address || "";
     $("#f-cuisine").value = place.cuisine;
     $("#f-date").value = place.date;
     $("#f-note").value = place.note || "";
     $("#f-wishlist").checked = !!place.wishlist;
     pendingRating = place.rating || 5;
     pendingMoods = [...(place.moods || [])];
+    $("#geo-hint").textContent = place.lat
+      ? `已標記在地圖上 · ${place.geoLabel || place.address || ""}`
+      : "填地址後會自動標到地圖上";
   } else {
     title.textContent = "新增回憶";
     del.classList.add("hidden");
     $("#edit-form").reset();
     $("#f-date").value = todayLocal();
     $("#f-wishlist").checked = false;
+    $("#f-address").value = "";
     pendingRating = 5;
     pendingMoods = [];
+    $("#geo-hint").textContent = "填地址後會自動標到地圖上";
   }
   $("#f-rating").value = String(pendingRating);
   syncStars();
@@ -461,10 +477,11 @@ function openEditor(id = null) {
   $("#edit-dialog").showModal();
 }
 
-function onSavePlace(e) {
+async function onSavePlace(e) {
   e.preventDefault();
   const payload = {
     name: $("#f-name").value.trim(),
+    address: $("#f-address").value.trim(),
     cuisine: $("#f-cuisine").value,
     date: $("#f-date").value,
     rating: pendingRating,
@@ -474,23 +491,68 @@ function onSavePlace(e) {
   };
   if (!payload.name) return;
 
-  const wasNew = !editingId;
-  if (editingId) {
-    const idx = state.places.findIndex((p) => p.id === editingId);
-    if (idx >= 0) state.places[idx] = { ...state.places[idx], ...payload };
-  } else {
-    state.places.push({ id: uid(), ...payload, createdAt: Date.now() });
-  }
+  const saveBtn = $("#btn-save-place");
+  const prevText = saveBtn.textContent;
+  saveBtn.disabled = true;
+  saveBtn.textContent = "定位中…";
 
-  persist();
-  $("#edit-dialog").close();
-  renderAll();
+  try {
+    const existing = editingId ? state.places.find((p) => p.id === editingId) : null;
+    const addressChanged = !existing || (existing.address || "") !== payload.address;
 
-  if (wasNew && !payload.wishlist) {
-    playStampFx();
-    toast(`「${payload.name}」已蓋章！`);
-  } else {
-    toast("已保存並同步");
+    if (payload.address && addressChanged) {
+      try {
+        const geo = await geocodeAddress(payload.address);
+        if (geo) {
+          payload.lat = geo.lat;
+          payload.lng = geo.lng;
+          payload.geoLabel = geo.label;
+          $("#geo-hint").textContent = `已找到：${geo.label}`;
+        } else {
+          payload.lat = null;
+          payload.lng = null;
+          payload.geoLabel = "";
+          toast("找不到這個地址，回憶仍會保存（地圖暫不顯示）");
+        }
+      } catch (err) {
+        console.warn(err);
+        toast("地址查詢失敗，回憶仍會保存");
+      }
+    } else if (!payload.address) {
+      payload.lat = null;
+      payload.lng = null;
+      payload.geoLabel = "";
+    } else if (existing) {
+      payload.lat = existing.lat;
+      payload.lng = existing.lng;
+      payload.geoLabel = existing.geoLabel;
+    }
+
+    const wasNew = !editingId;
+    if (editingId) {
+      const idx = state.places.findIndex((p) => p.id === editingId);
+      if (idx >= 0) state.places[idx] = { ...state.places[idx], ...payload };
+    } else {
+      state.places.push({ id: uid(), ...payload, createdAt: Date.now() });
+    }
+
+    persist();
+    $("#edit-dialog").close();
+    renderAll();
+
+    if (wasNew && !payload.wishlist) {
+      playStampFx();
+      toast(
+        payload.lat
+          ? `「${payload.name}」已蓋章並標上地圖！`
+          : `「${payload.name}」已蓋章！`
+      );
+    } else {
+      toast("已保存並同步");
+    }
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = prevText;
   }
 }
 
@@ -515,6 +577,11 @@ function openDetail(id) {
   $("#detail-body").innerHTML = `
     <p class="card-cuisine">${escapeHtml(place.cuisine)} · ${place.date || "—"}</p>
     <p class="stars-inline">${place.wishlist ? "願望清單（還沒吃過）" : starsText(place.rating)}</p>
+    ${
+      place.address || place.geoLabel
+        ? `<p class="sub" style="margin:0.4rem 0 0">📍 ${escapeHtml(place.geoLabel || place.address)}</p>`
+        : ""
+    }
     <div>${moods}</div>
     ${place.note ? `<div class="detail-note">${escapeHtml(place.note)}</div>` : `<p class="sub">還沒寫小故事。</p>`}
   `;

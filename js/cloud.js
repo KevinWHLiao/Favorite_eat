@@ -1,6 +1,6 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isCloudConfigured } from "./config.js?v=20260926a";
-import { defaultState } from "./storage.js?v=20260926a";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, isCloudConfigured } from "./config.js?v=20260926b";
+import { defaultState } from "./storage.js?v=20260926b";
 
 const ROOM_KEY = "favorite_eat_room";
 
@@ -71,7 +71,7 @@ export async function createRoom(state) {
       rememberRoomCode(code);
       return { code, payload };
     }
-    if (error.code !== "23505") throw error; // unique violation → retry
+    if (error.code !== "23505") throw error;
   }
   throw new Error("無法建立房間，請再試一次");
 }
@@ -153,7 +153,6 @@ export function subscribeRoom(code, onRemote) {
         try {
           onRemote(normalizePayload(payload.new.payload), payload.new.updated_at);
         } finally {
-          // small delay so our echo save doesn't fight
           setTimeout(() => {
             applyingRemote = false;
           }, 50);
