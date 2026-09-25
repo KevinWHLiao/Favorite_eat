@@ -7,7 +7,7 @@ import {
   defaultState,
   uid,
   evaluateBadges,
-} from "./storage.js";
+} from "./storage.js?v=20260926a";
 import {
   cloudReady,
   getSavedRoomCode,
@@ -19,7 +19,7 @@ import {
   unsubscribeRoom,
   isApplyingRemote,
   normalizeCode,
-} from "./cloud.js";
+} from "./cloud.js?v=20260926a";
 
 let state = loadState() || defaultState();
 let roomCode = getSavedRoomCode();
@@ -88,7 +88,7 @@ function updateCloudHint() {
   const hint = $("#cloud-hint");
   if (!cloudReady()) {
     hint.className = "hint warn";
-    hint.textContent = "雲端尚未設定：請在 js/config.js 填入 Supabase 網址與金鑰。";
+    hint.textContent = "雲端尚未設定：請在 js/config.js 填入 Supabase 網址與金鑰。若已設定仍看到此訊息，請強制重新整理頁面。";
     $("#onboard-submit").disabled = true;
   } else {
     hint.className = "hint ok";
