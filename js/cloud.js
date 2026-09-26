@@ -1,6 +1,6 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isCloudConfigured } from "./config.js?v=20260926e";
-import { defaultState } from "./storage.js?v=20260926e";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, isCloudConfigured } from "./config.js?v=20260926f";
+import { defaultState } from "./storage.js?v=20260926f";
 
 const ROOM_KEY = "favorite_eat_room";
 
@@ -41,7 +41,15 @@ export function normalizeCode(raw) {
   return String(raw || "")
     .trim()
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
+    .replace(/[^A-Z0-9_]/g, "");
+}
+
+export function validateCustomCode(raw) {
+  const code = normalizeCode(raw);
+  if (!code) return { ok: true, code: "" };
+  if (code.length < 4) return { ok: false, error: "房間碼至少 4 碼" };
+  if (code.length > 16) return { ok: false, error: "房間碼最多 16 碼" };
+  return { ok: true, code };
 }
 
 function normalizePayload(data) {
@@ -55,13 +63,32 @@ function normalizePayload(data) {
   };
 }
 
-export async function createRoom(state) {
+export async function createRoom(state, preferredCode = "") {
   const sb = getClient();
   if (!sb) throw new Error("雲端尚未設定");
 
+  const payload = normalizePayload(state);
+  const custom = validateCustomCode(preferredCode);
+  if (!custom.ok) throw new Error(custom.error);
+
+  if (custom.code) {
+    const { error } = await sb.from("rooms").insert({
+      code: custom.code,
+      payload,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      if (error.code === "23505") {
+        throw new Error("這個房間碼已被使用，換一個更好記的吧");
+      }
+      throw error;
+    }
+    rememberRoomCode(custom.code);
+    return { code: custom.code, payload };
+  }
+
   for (let attempt = 0; attempt < 8; attempt++) {
     const code = makeRoomCode();
-    const payload = normalizePayload(state);
     const { error } = await sb.from("rooms").insert({
       code,
       payload,

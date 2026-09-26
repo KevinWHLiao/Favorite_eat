@@ -135,6 +135,24 @@ body {
   color: var(--ink);
 }
 
+.maker-credit {
+  margin: -0.35rem 0 1.1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--rose);
+  opacity: 0.9;
+}
+
+.foot-credit {
+  margin: 0;
+  width: 100%;
+  text-align: center;
+  opacity: 0.75;
+  font-size: 0.75rem;
+  padding-bottom: 0.15rem;
+}
+
 .lead, .sub {
   color: var(--fog);
   margin: 0 0 1.25rem;

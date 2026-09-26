@@ -1,4 +1,4 @@
-import { placesWithCoords, placesMissingCoords } from "./geo.js?v=20260926e";
+import { placesWithCoords, placesMissingCoords } from "./geo.js?v=20260926f";
 
 let map = null;
 let layer = null;

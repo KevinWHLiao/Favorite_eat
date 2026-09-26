@@ -7,7 +7,7 @@ import {
   defaultState,
   uid,
   evaluateBadges,
-} from "./storage.js?v=20260926e";
+} from "./storage.js?v=20260926f";
 import {
   cloudReady,
   getSavedRoomCode,
@@ -19,9 +19,10 @@ import {
   unsubscribeRoom,
   isApplyingRemote,
   normalizeCode,
-} from "./cloud.js?v=20260926e";
-import { geocodePlace, placesMissingCoords } from "./geo.js?v=20260926e";
-import { renderMap, invalidateMap } from "./map.js?v=20260926e";
+  validateCustomCode,
+} from "./cloud.js?v=20260926f";
+import { geocodePlace, placesMissingCoords } from "./geo.js?v=20260926f";
+import { renderMap, invalidateMap } from "./map.js?v=20260926f";
 
 let state = loadState() || defaultState();
 let roomCode = getSavedRoomCode();
@@ -96,7 +97,7 @@ function updateCloudHint() {
     hint.className = "hint ok";
     hint.textContent =
       onboardMode === "create"
-        ? "建立後會產生房間碼，把碼傳給對方就能一起寫。"
+        ? "可自訂好記的房間碼；留空則系統幫你隨機產生。"
         : "輸入對方分享的房間碼，進入同一本手帳。";
     $("#onboard-submit").disabled = false;
   }
@@ -107,15 +108,22 @@ function setOnboardMode(mode) {
   $$(".mode-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.mode === mode);
   });
-  const roomField = $("#room-code-field");
   const roomInput = $("#room-code-input");
+  const roomLabel = $("#room-code-label");
+  const roomHint = $("#room-code-hint");
+  $("#room-code-field")?.classList.remove("hidden");
+
   if (mode === "join") {
-    roomField.classList.remove("hidden");
+    roomLabel.textContent = "房間碼";
     roomInput.required = true;
+    roomInput.placeholder = "輸入對方的房間碼";
+    roomHint.textContent = "請輸入對方分享給你的房間碼";
     $("#onboard-submit").textContent = "加入雲端房間";
   } else {
-    roomField.classList.add("hidden");
+    roomLabel.textContent = "自訂房間碼（選填）";
     roomInput.required = false;
+    roomInput.placeholder = "例如 OURLOVE（留空則隨機）";
+    roomHint.textContent = "可用英文、數字、底線，4～16 碼，好記最好";
     $("#onboard-submit").textContent = "建立雲端房間";
   }
   updateCloudHint();
@@ -246,10 +254,13 @@ async function onOnboardSubmit(e) {
     if (onboardMode === "create") {
       state = defaultState();
       state.couple = { a, b };
-      const room = await createRoom(state);
+      const preferred = $("#room-code-input").value;
+      const check = validateCustomCode(preferred);
+      if (!check.ok) throw new Error(check.error);
+      const room = await createRoom(state, preferred);
       roomCode = room.code;
       saveState(state);
-      enterApp(`房間已建立！把房間碼 ${roomCode} 傳給對方`);
+      enterApp(`房間已建立！房間碼 ${roomCode}，傳給對方就能一起寫`);
     } else {
       const code = normalizeCode($("#room-code-input").value);
       const room = await joinRoom(code);

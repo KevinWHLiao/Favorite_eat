@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=20260926e" />
+  <link rel="stylesheet" href="css/style.css?v=20260926f" />
 </head>
 <body>
   <div class="bg-glow" aria-hidden="true"></div>
@@ -30,6 +30,7 @@
       <p class="brand-mark">Favorite Eat</p>
       <h1>雙人餐桌</h1>
       <p class="lead">輸入同一個房間碼，兩人就能共用一本軟綿綿的美食印章手帳。</p>
+      <p class="maker-credit">Kevin_WH_Liao 製作</p>
 
       <div class="mode-switch" role="tablist" aria-label="進入方式">
         <button type="button" class="mode-btn active" data-mode="create">建立房間</button>
@@ -37,10 +38,11 @@
       </div>
 
       <form id="onboard-form" class="stack">
-        <label id="room-code-field" class="hidden">
-          房間碼
-          <input type="text" id="room-code-input" placeholder="例如 A3K9MP" maxlength="12" autocomplete="off" />
+        <label id="room-code-field">
+          <span id="room-code-label">自訂房間碼（選填）</span>
+          <input type="text" id="room-code-input" placeholder="例如 OURLOVE（留空則隨機）" maxlength="16" autocomplete="off" />
         </label>
+        <p class="hint" id="room-code-hint">可用英文、數字、底線，4～16 碼，好記最好</p>
         <label>
           你們怎麼叫對方？
           <div class="name-row">
@@ -166,6 +168,7 @@
         <input type="file" id="btn-import" accept="application/json" hidden />
       </label>
       <button class="ghost" id="btn-leave-room" type="button">離開房間</button>
+      <span class="maker-credit foot-credit">Kevin_WH_Liao 製作</span>
     </footer>
   </div>
 
@@ -244,6 +247,6 @@
     <div class="stamp-seal">蓋章！</div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260926e"></script>
+  <script type="module" src="js/app.js?v=20260926f"></script>
 </body>
 </html>
